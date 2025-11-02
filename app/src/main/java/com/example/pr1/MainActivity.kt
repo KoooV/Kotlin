@@ -63,7 +63,7 @@ fun Hello(name: String?) {
 @Composable
 fun HelloPreviewWithName() {
     Pr1Theme {
-        Hello(name = "Иван")
+        Hello(name = "Александр")
     }
 }
 
@@ -84,7 +84,7 @@ fun HelloPreviewWithNull() {
 @Composable
 fun HelloPreviewPortrait() {
     Pr1Theme {
-        Hello(name = "Иван")
+        Hello(name = "Александр")
     }
 }
 
@@ -97,7 +97,7 @@ fun HelloPreviewPortrait() {
 @Composable
 fun HelloPreviewLandscape() {
     Pr1Theme {
-        Hello(name = "Иван")
+        Hello(name = "Александр")
     }
 }
 
@@ -117,7 +117,7 @@ fun HelloPreviewRound() {
                 .background(Color.Yellow),
             contentAlignment = Alignment.Center
         ) {
-            Hello(name = "Иван")
+            Hello(name = "Александр")
         }
     }
 }
