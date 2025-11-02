@@ -1,3 +1,4 @@
 <resources>
     <string name="app_name">Pr1</string>
+    <string name="compose_description">Jetpack Compose — это современный набор инструментов для создания пользовательского интерфейса (UI) на Android, разработанный Google.</string>
 </resources>
