@@ -12,9 +12,15 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.tooling.preview.Preview
-import androidx.lifecycle.viewmodel.compose.viewModel
-import com.example.module3_2.ui.CounterScreen
 import com.example.module3_2.ui.theme.Module3_2Theme
+
+import androidx.navigation.compose.rememberNavController
+import androidx.navigation.compose.NavHost
+import androidx.navigation.compose.composable
+import androidx.navigation.NavType
+import androidx.navigation.navArgument
+import com.example.module3_2.ui.HomeScreen
+import com.example.module3_2.ui.DetailsScreen
 
 class MainActivity : ComponentActivity() {
 
@@ -29,12 +35,24 @@ class MainActivity : ComponentActivity() {
         setContent {
             Module3_2Theme {
                 Scaffold(modifier = Modifier.fillMaxSize()) { innerPadding ->
-                    val counterViewModel: CounterViewModel = viewModel()
-                    // Показываем экран счетчика
-                    CounterScreen(
-                        modifier = Modifier.padding(innerPadding),
-                        viewModel = counterViewModel
-                    )
+                    val navController = rememberNavController()
+
+                    NavHost(
+                        navController = navController,
+                        startDestination = "home",
+                        modifier = Modifier.padding(innerPadding)
+                    ) {
+                        composable("home") {
+                            HomeScreen(onNavigate = { navController.navigate("details/42") })
+                        }
+                        composable(
+                            route = "details/{id}",
+                            arguments = listOf(navArgument("id") { type = NavType.IntType })
+                        ) { backStackEntry ->
+                            val id = backStackEntry.arguments?.getInt("id") ?: 0
+                            DetailsScreen(navController = navController, id = id)
+                        }
+                    }
                 }
             }
         }
