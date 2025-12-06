@@ -52,6 +52,8 @@ dependencies {
     implementation(libs.androidx.lifecycle.viewmodel.compose)
     // Navigation for Jetpack Compose
     implementation("androidx.navigation:navigation-compose:2.5.3")
+    // Window size class (Material3) for adaptive layouts
+    implementation("androidx.compose.material3:material3-window-size-class:1.1.0")
     testImplementation(libs.junit)
     androidTestImplementation(libs.androidx.junit)
     androidTestImplementation(libs.androidx.espresso.core)

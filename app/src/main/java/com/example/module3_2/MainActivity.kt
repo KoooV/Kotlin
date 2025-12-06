@@ -13,14 +13,10 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.tooling.preview.Preview
 import com.example.module3_2.ui.theme.Module3_2Theme
-
-import androidx.navigation.compose.rememberNavController
-import androidx.navigation.compose.NavHost
-import androidx.navigation.compose.composable
-import androidx.navigation.NavType
-import androidx.navigation.navArgument
-import com.example.module3_2.ui.HomeScreen
-import com.example.module3_2.ui.DetailsScreen
+import androidx.compose.material3.windowsizeclass.calculateWindowSizeClass
+import androidx.compose.material3.windowsizeclass.WindowSizeClass
+import androidx.compose.material3.windowsizeclass.ExperimentalMaterial3WindowSizeClassApi
+import com.example.module3_2.ui.AdaptiveLayout
 
 class MainActivity : ComponentActivity() {
 
@@ -28,6 +24,7 @@ class MainActivity : ComponentActivity() {
         private const val TAG = "MainActivity"
     }
 
+    @OptIn(ExperimentalMaterial3WindowSizeClassApi::class)
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         Log.d(TAG, "onCreate")
@@ -35,24 +32,12 @@ class MainActivity : ComponentActivity() {
         setContent {
             Module3_2Theme {
                 Scaffold(modifier = Modifier.fillMaxSize()) { innerPadding ->
-                    val navController = rememberNavController()
+                    // Вычисляем класс размера окна
+                    val windowSizeClass: WindowSizeClass = calculateWindowSizeClass(this@MainActivity)
+                    val widthSizeClass = windowSizeClass.widthSizeClass
 
-                    NavHost(
-                        navController = navController,
-                        startDestination = "home",
-                        modifier = Modifier.padding(innerPadding)
-                    ) {
-                        composable("home") {
-                            HomeScreen(onNavigate = { navController.navigate("details/42") })
-                        }
-                        composable(
-                            route = "details/{id}",
-                            arguments = listOf(navArgument("id") { type = NavType.IntType })
-                        ) { backStackEntry ->
-                            val id = backStackEntry.arguments?.getInt("id") ?: 0
-                            DetailsScreen(navController = navController, id = id)
-                        }
-                    }
+                    // Используем AdaptiveLayout.
+                    AdaptiveLayout(windowWidthSizeClass = widthSizeClass, modifier = Modifier.padding(innerPadding))
                 }
             }
         }
