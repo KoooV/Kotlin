@@ -12,6 +12,8 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.tooling.preview.Preview
+import androidx.lifecycle.viewmodel.compose.viewModel
+import com.example.module3_2.ui.CounterScreen
 import com.example.module3_2.ui.theme.Module3_2Theme
 
 class MainActivity : ComponentActivity() {
@@ -27,9 +29,11 @@ class MainActivity : ComponentActivity() {
         setContent {
             Module3_2Theme {
                 Scaffold(modifier = Modifier.fillMaxSize()) { innerPadding ->
-                    Greeting(
-                        name = "Android",
-                        modifier = Modifier.padding(innerPadding)
+                    val counterViewModel: CounterViewModel = viewModel()
+                    // Показываем экран счетчика
+                    CounterScreen(
+                        modifier = Modifier.padding(innerPadding),
+                        viewModel = counterViewModel
                     )
                 }
             }
