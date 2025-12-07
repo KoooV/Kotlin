@@ -17,6 +17,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.unit.dp
 
 @Composable
@@ -27,16 +28,20 @@ fun TodoListScreen(viewModel: TodoViewModel, onOpenDetail: (Int) -> Unit) {
         items(todos) { todo ->
             Row(modifier = Modifier
                 .fillMaxWidth()
-                .padding(8.dp), verticalAlignment = Alignment.CenterVertically,
+                .padding(8.dp)
+                .testTag("todo_row_${todo.id}"), verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.SpaceBetween) {
                 Column(modifier = Modifier
                     .weight(1f)
                     .clickable { onOpenDetail(todo.id) }
-                    .padding(16.dp)) {
+                    .padding(16.dp)
+                    .testTag("todo_column_${todo.id}")) {
                     Text(text = todo.title, style = MaterialTheme.typography.titleMedium)
                     Text(text = todo.description, style = MaterialTheme.typography.bodyMedium)
                 }
-                Checkbox(checked = todo.isCompleted, onCheckedChange = { viewModel.onToggleTodo(todo.id) })
+                Checkbox(checked = todo.isCompleted,
+                    onCheckedChange = { viewModel.onToggleTodo(todo.id) },
+                    modifier = Modifier.testTag("todo_checkbox_${todo.id}"))
             }
             HorizontalDivider()
         }
