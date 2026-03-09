@@ -4,6 +4,7 @@ import android.content.Context
 import android.content.Intent
 import androidx.compose.foundation.layout.*
 import androidx.compose.material3.*
+import androidx.compose.material3.TextField
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -11,6 +12,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.example.kotin4.service.OneShotTimerService
 import com.example.kotin4.service.TimerService
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -18,8 +20,13 @@ import com.example.kotin4.service.TimerService
 fun TimerScreen(modifier: Modifier = Modifier) {
 
     val context = LocalContext.current
+    // Подписываемся на StateFlow из сервиса
     val seconds by TimerService.seconds.collectAsState()
     val running by TimerService.running.collectAsState()
+
+    // Поле ввода для одноразового таймера
+    var inputText by remember { mutableStateOf("") }
+    var inputError by remember { mutableStateOf(false) }
 
     Scaffold(
         modifier = modifier,
@@ -31,12 +38,13 @@ fun TimerScreen(modifier: Modifier = Modifier) {
         Column(
             modifier = Modifier
                 .fillMaxSize()
-                .padding(innerPadding),
+                .padding(innerPadding)
+                .padding(16.dp),
             horizontalAlignment = Alignment.CenterHorizontally,
             verticalArrangement = Arrangement.Center
         ) {
 
-            // ─── Крупный счётчик ────────────────────────
+            // Крупный счётчик
             Text(
                 text = formatTime(seconds),
                 fontSize = 72.sp,
@@ -54,7 +62,7 @@ fun TimerScreen(modifier: Modifier = Modifier) {
 
             Spacer(Modifier.height(48.dp))
 
-            // ─── Кнопки Старт / Стоп ───────────────────
+            // Кнопки Старт / Стоп
             Row(
                 horizontalArrangement = Arrangement.spacedBy(24.dp)
             ) {
@@ -81,7 +89,7 @@ fun TimerScreen(modifier: Modifier = Modifier) {
 
             Spacer(Modifier.height(24.dp))
 
-            // ─── Статус ─────────────────────────────────
+            // Статус
             Text(
                 text = if (running) "Таймер запущен" else "Таймер остановлен",
                 style = MaterialTheme.typography.bodyLarge,
@@ -90,11 +98,42 @@ fun TimerScreen(modifier: Modifier = Modifier) {
                 else
                     MaterialTheme.colorScheme.onSurfaceVariant
             )
+
+            Spacer(Modifier.height(32.dp))
+
+            // Одноразовый таймер: ввод и кнопка
+            OutlinedTextField(
+                value = inputText,
+                onValueChange = {
+                    inputText = it.filter { ch -> ch.isDigit() }
+                    inputError = false
+                },
+                label = { Text("Секунд для одноразового таймера") },
+                isError = inputError,
+                singleLine = true,
+                modifier = Modifier.fillMaxWidth()
+            )
+
+            Spacer(Modifier.height(8.dp))
+
+            Button(
+                onClick = {
+                    val secs = inputText.toIntOrNull()
+                    if (secs == null || secs <= 0) {
+                        inputError = true
+                    } else {
+                        startOneShotTimer(context, secs)
+                    }
+                },
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Text("Запустить таймер")
+            }
         }
     }
 }
 
-// ─── Helpers ────────────────────────────────────────────
+// Helpers
 
 private fun formatTime(totalSeconds: Int): String {
     val h = totalSeconds / 3600
@@ -109,11 +148,18 @@ private fun formatTime(totalSeconds: Int): String {
 
 private fun startTimer(context: Context) {
     val intent = Intent(context, TimerService::class.java)
+    intent.action = TimerService.ACTION_START
     context.startForegroundService(intent)
 }
 
 private fun stopTimer(context: Context) {
     val intent = Intent(context, TimerService::class.java)
-    context.stopService(intent)
+    intent.action = TimerService.ACTION_STOP
+    context.startForegroundService(intent)
 }
 
+private fun startOneShotTimer(context: Context, seconds: Int) {
+    val intent = Intent(context, OneShotTimerService::class.java)
+    intent.putExtra(OneShotTimerService.EXTRA_SECONDS, seconds)
+    context.startForegroundService(intent)
+}
