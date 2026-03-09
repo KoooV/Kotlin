@@ -11,7 +11,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.ui.Modifier
 import androidx.core.app.ActivityCompat
 import androidx.core.content.ContextCompat
-import com.example.kotin4.ui.TimerScreen
+import com.example.kotin4.ui.RandomNumberScreen
 import com.example.kotin4.ui.theme.Kotin4Theme
 
 class MainActivity : ComponentActivity() {
@@ -23,7 +23,7 @@ class MainActivity : ComponentActivity() {
 
         setContent {
             Kotin4Theme {
-                TimerScreen(modifier = Modifier.fillMaxSize())
+                RandomNumberScreen(modifier = Modifier.fillMaxSize())
             }
         }
     }

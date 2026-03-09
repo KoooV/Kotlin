@@ -1,13 +1,14 @@
 package com.example.kotin4.service
 
-import android.app.Notification
 import android.app.NotificationChannel
 import android.app.NotificationManager
 import android.app.PendingIntent
 import android.app.Service
 import android.content.Intent
+import android.content.pm.PackageManager
 import android.os.IBinder
 import androidx.core.app.NotificationCompat
+import androidx.core.content.ContextCompat
 import com.example.kotin4.MainActivity
 import kotlinx.coroutines.*
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -18,15 +19,8 @@ class OneShotTimerService : Service() {
 
     companion object {
         const val EXTRA_SECONDS = "extra_seconds"
-
-        // Канал для foreground-уведомления (отсчёт)
-        const val CHANNEL_RUNNING = "timer_running_channel"
-
-        // Канал для финального уведомления «Таймер завершён»
-        const val CHANNEL_DONE = "timer_done_channel"
-
-        const val NOTIFICATION_FG_ID = 43
-        const val NOTIFICATION_DONE_ID = 42
+        const val CHANNEL_ID = "timer_done_channel"
+        const val NOTIFICATION_ID = 42
 
         // Оставшееся время — UI подписывается на это
         private val _remaining = MutableStateFlow(0)
@@ -43,7 +37,7 @@ class OneShotTimerService : Service() {
 
     override fun onCreate() {
         super.onCreate()
-        createChannels()
+        createNotificationChannel()
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
@@ -53,31 +47,25 @@ class OneShotTimerService : Service() {
             return START_NOT_STICKY
         }
 
-        // Сразу поднимаем foreground, иначе Android убьёт сервис за 5 сек
-        _remaining.value = totalSeconds
-        _running.value = true
-        startForeground(NOTIFICATION_FG_ID, buildRunningNotification(totalSeconds))
-
         // Отменяем предыдущий таймер, если был
         timerJob?.cancel()
+
+        _remaining.value = totalSeconds
+        _running.value = true
 
         timerJob = serviceScope.launch {
             // Обратный отсчёт каждую секунду
             for (i in totalSeconds downTo 1) {
                 _remaining.value = i
-                updateForegroundNotification(i)
                 delay(1000L)
             }
-
             _remaining.value = 0
-            _running.value = false
 
-            // Показываем финальное уведомление «Таймер завершён!»
+            // Таймер завершён — показываем уведомление
             showFinishedNotification()
 
-            // Снимаем foreground и останавливаем сервис
-            @Suppress("DEPRECATION")
-            stopForeground(true)
+            // Сервис сам себя останавливает
+            _running.value = false
             stopSelf()
         }
 
@@ -93,38 +81,34 @@ class OneShotTimerService : Service() {
 
     override fun onBind(intent: Intent?): IBinder? = null
 
-    // Foreground-уведомление: «Идёт отсчёт: X сек»
-    private fun buildRunningNotification(sec: Int): Notification {
+    // Создание канала уведомлений
+    private fun createNotificationChannel() {
+        val channel = NotificationChannel(
+            CHANNEL_ID,
+            "Таймер завершён",
+            NotificationManager.IMPORTANCE_HIGH
+        ).apply {
+            description = "Уведомление о завершении одноразового таймера"
+        }
+        val manager = getSystemService(NotificationManager::class.java)
+        manager.createNotificationChannel(channel)
+    }
+
+    // Уведомление «Таймер завершён!»
+    private fun showFinishedNotification() {
+        if (ContextCompat.checkSelfPermission(
+                this, android.Manifest.permission.POST_NOTIFICATIONS
+            ) != PackageManager.PERMISSION_GRANTED
+        ) return
+
         val tapIntent = Intent(this, MainActivity::class.java).apply {
             flags = Intent.FLAG_ACTIVITY_SINGLE_TOP
         }
         val pendingIntent = PendingIntent.getActivity(
             this, 0, tapIntent, PendingIntent.FLAG_IMMUTABLE
         )
-        return NotificationCompat.Builder(this, CHANNEL_RUNNING)
-            .setContentTitle("Таймер запущен")
-            .setContentText("Осталось: $sec сек.")
-            .setSmallIcon(android.R.drawable.ic_dialog_info)
-            .setContentIntent(pendingIntent)
-            .setOngoing(true)
-            .build()
-    }
 
-    // Обновляем foreground-уведомление каждую секунду
-    private fun updateForegroundNotification(sec: Int) {
-        val manager = getSystemService(NotificationManager::class.java)
-        manager?.notify(NOTIFICATION_FG_ID, buildRunningNotification(sec))
-    }
-
-    // Финальное уведомление «Таймер завершён!»
-    private fun showFinishedNotification() {
-        val tapIntent = Intent(this, MainActivity::class.java).apply {
-            flags = Intent.FLAG_ACTIVITY_SINGLE_TOP
-        }
-        val pendingIntent = PendingIntent.getActivity(
-            this, 1, tapIntent, PendingIntent.FLAG_IMMUTABLE
-        )
-        val notification = NotificationCompat.Builder(this, CHANNEL_DONE)
+        val notification = NotificationCompat.Builder(this, CHANNEL_ID)
             .setContentTitle("Таймер завершён!")
             .setContentText("Время вышло")
             .setSmallIcon(android.R.drawable.ic_dialog_info)
@@ -133,26 +117,7 @@ class OneShotTimerService : Service() {
             .build()
 
         val manager = getSystemService(NotificationManager::class.java)
-        manager?.notify(NOTIFICATION_DONE_ID, notification)
-    }
-
-    // Создание каналов уведомлений
-    private fun createChannels() {
-        val manager = getSystemService(NotificationManager::class.java) ?: return
-
-        val runningChannel = NotificationChannel(
-            CHANNEL_RUNNING,
-            "Таймер в процессе",
-            NotificationManager.IMPORTANCE_LOW
-        ).apply { description = "Отображается пока таймер тикает" }
-
-        val doneChannel = NotificationChannel(
-            CHANNEL_DONE,
-            "Таймер завершён",
-            NotificationManager.IMPORTANCE_HIGH
-        ).apply { description = "Уведомление о завершении таймера" }
-
-        manager.createNotificationChannel(runningChannel)
-        manager.createNotificationChannel(doneChannel)
+        manager.notify(NOTIFICATION_ID, notification)
     }
 }
+
