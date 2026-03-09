@@ -1,0 +1,87 @@
+[
+  {
+    "id": 1,
+    "userId": 1,
+    "title": "Красивый закат сегодня",
+    "body": "Смотрите, какой цвет неба! Никогда такого не видел в нашем городе. Природа — лучший художник.",
+    "avatarUrl": "https://i.pravatar.cc/150?img=1"
+  },
+  {
+    "id": 2,
+    "userId": 2,
+    "title": "Новый кофе-мастер-класс",
+    "body": "Приходите все! Будем варить эспрессо, капучино и латте. Место ограничено — записывайтесь заранее.",
+    "avatarUrl": "https://i.pravatar.cc/150?img=2"
+  },
+  {
+    "id": 3,
+    "userId": 3,
+    "title": "Прочитал 'Чистый код'",
+    "body": "Книга Роберта Мартина перевернула моё понимание архитектуры. Всем разработчикам — must read!",
+    "avatarUrl": "https://i.pravatar.cc/150?img=3"
+  },
+  {
+    "id": 4,
+    "userId": 4,
+    "title": "Утренняя пробежка 10 км",
+    "body": "Установил личный рекорд! Пробежал за 48 минут. Мотивация — ключ ко всему.",
+    "avatarUrl": "https://i.pravatar.cc/150?img=4"
+  },
+  {
+    "id": 5,
+    "userId": 5,
+    "title": "Kotlin Coroutines — это магия",
+    "body": "Только что разобрался с async/await и supervisorScope. Параллельная загрузка данных стала простой и понятной.",
+    "avatarUrl": "https://i.pravatar.cc/150?img=5"
+  },
+  {
+    "id": 6,
+    "userId": 6,
+    "title": "Рецепт домашней пиццы",
+    "body": "Тесто на дрожжах, томатный соус, моцарелла и базилик. 12 минут в духовке при 250°C — идеально!",
+    "avatarUrl": "https://i.pravatar.cc/150?img=6"
+  },
+  {
+    "id": 7,
+    "userId": 7,
+    "title": "Переезд в новый офис",
+    "body": "Наша команда переехала в коворкинг с панорамными окнами. Продуктивность выросла на 200%!",
+    "avatarUrl": "https://i.pravatar.cc/150?img=7"
+  },
+  {
+    "id": 8,
+    "userId": 8,
+    "title": "Compose Multiplatform — будущее",
+    "body": "Написал одно приложение, работает на Android, iOS и Desktop. JetBrains делает невероятные вещи.",
+    "avatarUrl": "https://i.pravatar.cc/150?img=8"
+  },
+  {
+    "id": 9,
+    "userId": 9,
+    "title": "Поход в горы на выходных",
+    "body": "Маршрут был непростой, но виды с вершины стоили каждого шага. Рекомендую всем!",
+    "avatarUrl": "https://i.pravatar.cc/150?img=9"
+  },
+  {
+    "id": 10,
+    "userId": 10,
+    "title": "Новый сезон любимого сериала",
+    "body": "Наконец-то вышел! Первая серия — огонь. Без спойлеров, но финальная сцена — wow.",
+    "avatarUrl": "https://i.pravatar.cc/150?img=10"
+  },
+  {
+    "id": 11,
+    "userId": 1,
+    "title": "Мой первый pull request",
+    "body": "Сегодня мой PR приняли в open-source проект! Маленький шаг, но я горжусь.",
+    "avatarUrl": "https://i.pravatar.cc/150?img=1"
+  },
+  {
+    "id": 12,
+    "userId": 3,
+    "title": "Лучшие плагины для Android Studio",
+    "body": "Key Promoter X, Rainbow Brackets, и конечно Copilot. Делюсь подборкой!",
+    "avatarUrl": "https://i.pravatar.cc/150?img=3"
+  }
+]
+
