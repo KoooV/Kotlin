@@ -4,38 +4,49 @@ import kotlinx.coroutines.*
 import kotlin.random.Random
 import kotlin.system.measureTimeMillis
 
+//Data-классы
 
-/** 1. Загрузка списка пользователей (≈ 1800 мс) */
-suspend fun loadUsers(): List<String> {
+data class User(val id: Int, val name: String)
+
+data class SaleItem(val product: String, val qty: Int, val revenue: Int)
+data class SalesReport(val today: String, val items: List<SaleItem>)
+
+data class WeatherInfo(val city: String, val temp: Int, val condition: String)
+
+//Эмуляция «долгих» операций
+
+suspend fun loadUsers(): List<User> {
     delay(1800)
     maybeFail("loadUsers")
-    return listOf("Алексей", "Мария", "Дмитрий", "Елена", "Сергей")
-}
-
-/** 2. Загрузка статистики продаж за день (≈ 1200 мс) */
-suspend fun loadSalesStatistics(): Map<String, Int> {
-    delay(1200)
-    maybeFail("loadSalesStatistics")
-    return mapOf(
-        "Ноутбуки" to 12,
-        "Смартфоны" to 47,
-        "Планшеты" to 8,
-        "Наушники" to 134
+    return listOf(
+        User(1, "Alice"),
+        User(2, "Bob"),
+        User(3, "Ivan"),
+        User(4, "Olga")
     )
 }
 
-/** 3. Получение текущей погоды в 3 городах (≈ 2500 мс) */
-suspend fun loadWeather(): List<String> {
+suspend fun loadSalesStatistics(): SalesReport {
+    delay(1200)
+    maybeFail("loadSalesStatistics")
+    return SalesReport(
+        today = "2025-12-01",
+        items = listOf(
+            SaleItem("Coffee", 42, 1680),
+            SaleItem("Tea", 19, 475)
+        )
+    )
+}
+
+suspend fun loadWeather(): List<WeatherInfo> {
     delay(2500)
     maybeFail("loadWeather")
     return listOf(
-        "Москва: -3°C",
-        "Санкт-Петербург: -7°C",
-        "Новосибирск: -18°C"
+        WeatherInfo("Moscow", -18, "snow"),
+        WeatherInfo("New York", -5, "cloudy"),
+        WeatherInfo("Tokyo", 11, "rain")
     )
 }
-
-// С вероятностью ~20 % бросает исключение, эмулируя случайный сбой.
 
 private fun maybeFail(taskName: String) {
     if (Random.nextInt(100) < 20) {
@@ -43,76 +54,78 @@ private fun maybeFail(taskName: String) {
     }
 }
 
+// Форматирование в JSON
+
+fun List<User>.toJson(): String = buildString {
+    appendLine("[")
+    this@toJson.forEachIndexed { i, u ->
+        val comma = if (i < this@toJson.lastIndex) "," else ""
+        appendLine("""  {"id":${u.id}, "name":"${u.name}"}$comma""")
+    }
+    append("]")
+}
+
+fun SalesReport.toJson(): String = buildString {
+    appendLine("{")
+    appendLine("""  "today": "$today",""")
+    appendLine("""  "items": [""")
+    items.forEachIndexed { i, s ->
+        val comma = if (i < items.lastIndex) "," else ""
+        appendLine("""    {"product":"${s.product}", "qty":${s.qty}, "revenue":${s.revenue}}$comma""")
+    }
+    appendLine("  ]")
+    append("}")
+}
+
+fun List<WeatherInfo>.toWeatherJson(): String = buildString {
+    appendLine("[")
+    this@toWeatherJson.forEachIndexed { i, w ->
+        val comma = if (i < this@toWeatherJson.lastIndex) "," else ""
+        appendLine("""  {"city":"${w.city}", "temp":${w.temp}, "condition":"${w.condition}"}$comma""")
+    }
+    append("]")
+}
+
+
 fun main() = runBlocking {
-    println(" Запуск трёх параллельных задач…\n")
+    println("Запуск трёх параллельных задач…\n")
 
     val totalTime = measureTimeMillis {
-
-        // Запускаем три задачи параллельно через async.
-        // Каждая обёрнута в try-catch, чтобы при сбое вернуть null, а не уронить всю программу.
         val usersDeferred = async {
-            try {
-                loadUsers()
-            } catch (e: Exception) {
-                println(" Ошибка при загрузке пользователей: ${e.message}")
-                null
-            }
+            try { loadUsers() }
+            catch (e: Exception) { println("Ошибка при загрузке пользователей: ${e.message}"); null }
         }
 
         val salesDeferred = async {
-            try {
-                loadSalesStatistics()
-            } catch (e: Exception) {
-                println(" Ошибка при загрузке статистики продаж: ${e.message}")
-                null
-            }
+            try { loadSalesStatistics() }
+            catch (e: Exception) { println("Ошибка при загрузке статистики: ${e.message}"); null }
         }
 
         val weatherDeferred = async {
-            try {
-                loadWeather()
-            } catch (e: Exception) {
-                println(" Ошибка при загрузке погоды: ${e.message}")
-                null
-            }
+            try { loadWeather() }
+            catch (e: Exception) { println("Ошибка при загрузке погоды: ${e.message}"); null }
         }
 
-        // Ожидаем завершения ВСЕХ трёх задач
         val users = usersDeferred.await()
         val sales = salesDeferred.await()
         val weather = weatherDeferred.await()
 
-        println("════════════════════════════════════════")
-
-        if (users != null) {
-            println("Пользователи: ${users.joinToString()}")
-        } else {
-            println("Пользователи: данные недоступны (произошла ошибка)")
-        }
+        println("═══════════════ users.json ═══════════════")
+        if (users != null) println(users.toJson())
+        else println("данные недоступны")
 
         println()
-
-        if (sales != null) {
-            println("Статистика продаж за день:")
-            sales.forEach { (product, count) ->
-                println("   • $product — $count шт.")
-            }
-        } else {
-            println("Статистика продаж: данные недоступны (произошла ошибка)")
-        }
+        println("═══════════════ sales.json ═══════════════")
+        if (sales != null) println(sales.toJson())
+        else println("данные недоступны")
 
         println()
+        println("══════════════ weather.json ══════════════")
+        if (weather != null) println(weather.toWeatherJson())
+        else println("данные недоступны")
 
-        if (weather != null) {
-            println("Погода:")
-            weather.forEach { println("   • $it") }
-        } else {
-            println("Погода: данные недоступны (произошла ошибка)")
-        }
-
-        println("════════════════════════════════════════")
+        println("══════════════════════════════════════════")
     }
 
     println("\nОбщее время выполнения: ${totalTime} мс")
 }
-

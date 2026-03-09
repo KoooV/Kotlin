@@ -5,7 +5,7 @@ import java.io.File
 import java.security.MessageDigest
 import kotlin.system.measureTimeMillis
 
-// ─── SHA-256 хеширование содержимого файла ──────────────────────────
+//SHA-256 хеширование содержимого файла
 
 suspend fun computeSha256(file: File): String = withContext(Dispatchers.IO) {
     val digest = MessageDigest.getInstance("SHA-256")
@@ -14,7 +14,7 @@ suspend fun computeSha256(file: File): String = withContext(Dispatchers.IO) {
     hash.joinToString("") { "%02x".format(it) }
 }
 
-// ─── Рекурсивный поиск всех .json файлов ───────────────────────────
+//Рекурсивный поиск всех .json файлов
 
 fun findJsonFiles(dir: File): List<File> {
     return dir.walkTopDown()
@@ -22,7 +22,7 @@ fun findJsonFiles(dir: File): List<File> {
         .toList()
 }
 
-// ─── Точка входа ────────────────────────────────────────────────────
+//Точка входа
 
 fun main(args: Array<String>) = runBlocking {
 
@@ -49,7 +49,7 @@ fun main(args: Array<String>) = runBlocking {
     val totalTime = measureTimeMillis {
 
         val result = withTimeoutOrNull(timeoutSeconds * 1000) {
-            // Параллельно вычисляем хеш для каждого файла
+            //Параллельно вычисляем хеш для каждого файла
             val deferred = jsonFiles.map { file ->
                 async(Dispatchers.IO) {
                     val hash = computeSha256(file)
@@ -64,12 +64,12 @@ fun main(args: Array<String>) = runBlocking {
             return@measureTimeMillis
         }
 
-        // Группируем по хешу, оставляем только дубликаты (>1 файл с одинаковым хешем)
+        //Группируем по хешу, оставляем только дубликаты (>1 файл с одинаковым хешем)
         val duplicates = result
             .groupBy({ it.second }, { it.first })
             .filter { it.value.size > 1 }
 
-        // Вывод результатов
+        //Вывод результатов
         if (duplicates.isEmpty()) {
             println("Дубликатов не найдено.")
         } else {
@@ -81,7 +81,7 @@ fun main(args: Array<String>) = runBlocking {
             }
         }
 
-        // Детализация: все файлы и их хеши
+        //Детализация: все файлы и их хеши
         println("─── Все файлы ─────────────────────────")
         result.forEach { (file, hash) ->
             println("  ${hash.take(16)}…  ${file.path}")
