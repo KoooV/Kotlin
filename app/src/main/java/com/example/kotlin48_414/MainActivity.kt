@@ -1,8 +1,6 @@
 package com.example.kotlin48_414
 
 import android.Manifest
-import android.content.pm.PackageManager
-import android.os.Build
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.rememberLauncherForActivityResult
@@ -14,12 +12,10 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import androidx.core.content.ContextCompat
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.example.kotlin48_414.ui.theme.Kotlin48414Theme
@@ -31,7 +27,7 @@ class MainActivity : ComponentActivity() {
         setContent {
             Kotlin48414Theme {
                 Scaffold(modifier = Modifier.fillMaxSize()) { innerPadding ->
-                    WeatherForecastScreen(modifier = Modifier.padding(innerPadding))
+                    LocationScreen(modifier = Modifier.padding(innerPadding))
                 }
             }
         }
@@ -39,188 +35,216 @@ class MainActivity : ComponentActivity() {
 }
 
 @Composable
-fun WeatherForecastScreen(
+fun LocationScreen(
     modifier: Modifier = Modifier,
-    viewModel: PhotoProcessingViewModel = viewModel()
+    viewModel: LocationViewModel = viewModel()
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
-    val context = LocalContext.current
 
-    // Запрос разрешения на уведомления (Android 13+)
-    var hasNotificationPermission by remember {
-        mutableStateOf(
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-                ContextCompat.checkSelfPermission(
-                    context, Manifest.permission.POST_NOTIFICATIONS
-                ) == PackageManager.PERMISSION_GRANTED
-            } else true
-        )
-    }
+    // Результат запроса разрешений
+    var permissionDenied by remember { mutableStateOf(false) }
+
     val permissionLauncher = rememberLauncherForActivityResult(
-        ActivityResultContracts.RequestPermission()
-    ) { granted -> hasNotificationPermission = granted }
-
-    val isWorking = state.step == WeatherStep.LOADING || state.step == WeatherStep.REPORT
-
-    val statusText = when (state.step) {
-        WeatherStep.IDLE -> "Нажмите кнопку, чтобы собрать прогноз погоды"
-        WeatherStep.LOADING -> {
-            val done = state.cities.count { it.done }
-            val total = state.cities.size
-            if (done == 0) "Загружаем погоду для $total городов…"
-            else {
-                val doneCities = state.cities.filter { it.done }.joinToString(", ") { it.city }
-                val pending = state.cities.filter { !it.done }.joinToString(", ") { it.city }
-                if (pending.isEmpty()) "Все данные получены, формируем отчёт…"
-                else "Готово: $doneCities\n$pending в процессе…"
-            }
+        ActivityResultContracts.RequestMultiplePermissions()
+    ) { permissions ->
+        val granted = permissions[Manifest.permission.ACCESS_FINE_LOCATION] == true ||
+                permissions[Manifest.permission.ACCESS_COARSE_LOCATION] == true
+        if (granted) {
+            permissionDenied = false
+            viewModel.fetchLocation()
+        } else {
+            permissionDenied = true
         }
-        WeatherStep.REPORT -> "Все данные получены, формируем отчёт…"
-        WeatherStep.DONE -> "Отчёт готов! ✅"
-        WeatherStep.ERROR -> "❌ Ошибка"
     }
+
+    val isLoading = state is LocationState.Loading
 
     Column(
         modifier = modifier
             .fillMaxSize()
             .padding(24.dp),
         horizontalAlignment = Alignment.CenterHorizontally,
-        verticalArrangement = Arrangement.spacedBy(20.dp, Alignment.CenterVertically)
+        verticalArrangement = Arrangement.Center
     ) {
+
+        // Иконка / заголовок
         Text(
-            text = "☁ Прогноз погоды",
-            fontSize = 28.sp,
+            text = "📍",
+            fontSize = 64.sp
+        )
+        Spacer(modifier = Modifier.height(12.dp))
+        Text(
+            text = "Моё местоположение",
+            fontSize = 26.sp,
             fontWeight = FontWeight.Bold,
             textAlign = TextAlign.Center
         )
+        Spacer(modifier = Modifier.height(32.dp))
 
-        // Статус
-        Card(
-            modifier = Modifier.fillMaxWidth(),
-            colors = CardDefaults.cardColors(
-                containerColor = when (state.step) {
-                    WeatherStep.ERROR -> MaterialTheme.colorScheme.errorContainer
-                    WeatherStep.DONE -> MaterialTheme.colorScheme.primaryContainer
-                    else -> MaterialTheme.colorScheme.surfaceVariant
-                }
-            )
-        ) {
-            Text(
-                text = statusText,
-                fontSize = 16.sp,
-                textAlign = TextAlign.Center,
-                modifier = Modifier
-                    .padding(16.dp)
-                    .fillMaxWidth()
-            )
-        }
+        // Контент по состоянию
+        when (val s = state) {
 
-        // Прогресс
-        if (isWorking) {
-            LinearProgressIndicator(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .height(8.dp)
-            )
-        }
+            is LocationState.Idle -> {
+                Text(
+                    text = "Нажмите кнопку, чтобы определить адрес",
+                    fontSize = 16.sp,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    textAlign = TextAlign.Center
+                )
+            }
 
-        // Список городов
-        if (state.cities.isNotEmpty()) {
-            Card(modifier = Modifier.fillMaxWidth()) {
-                Column(modifier = Modifier.padding(16.dp)) {
-                    Text(
-                        text = "Города:",
-                        fontWeight = FontWeight.Bold,
-                        fontSize = 16.sp,
-                        modifier = Modifier.padding(bottom = 8.dp)
+            is LocationState.Loading -> {
+                CircularProgressIndicator(modifier = Modifier.size(56.dp))
+                Spacer(modifier = Modifier.height(16.dp))
+                Text(
+                    text = "Определяем местоположение…",
+                    fontSize = 16.sp,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    textAlign = TextAlign.Center
+                )
+            }
+
+            is LocationState.Success -> {
+                // Адрес
+                Card(
+                    modifier = Modifier.fillMaxWidth(),
+                    colors = CardDefaults.cardColors(
+                        containerColor = MaterialTheme.colorScheme.primaryContainer
                     )
-                    state.cities.forEach { cityState ->
-                        Row(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .padding(vertical = 4.dp),
-                            horizontalArrangement = Arrangement.SpaceBetween,
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            Text(text = cityState.city, fontSize = 15.sp)
-                            if (cityState.done && cityState.temperature != null) {
-                                val sign = if (cityState.temperature >= 0) "+" else ""
-                                Text(
-                                    text = "$sign${cityState.temperature}°C ✅",
-                                    fontSize = 15.sp,
-                                    color = MaterialTheme.colorScheme.primary,
-                                    fontWeight = FontWeight.Medium
-                                )
-                            } else if (isWorking || state.step == WeatherStep.REPORT) {
-                                CircularProgressIndicator(
-                                    modifier = Modifier.size(18.dp),
-                                    strokeWidth = 2.dp
-                                )
-                            }
+                ) {
+                    Column(
+                        modifier = Modifier.padding(20.dp),
+                        horizontalAlignment = Alignment.CenterHorizontally
+                    ) {
+                        Text(
+                            text = "Ваш адрес",
+                            fontSize = 13.sp,
+                            color = MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.7f),
+                            fontWeight = FontWeight.Medium
+                        )
+                        Spacer(modifier = Modifier.height(8.dp))
+                        Text(
+                            text = s.address,
+                            fontSize = 20.sp,
+                            fontWeight = FontWeight.Bold,
+                            textAlign = TextAlign.Center,
+                            color = MaterialTheme.colorScheme.onPrimaryContainer
+                        )
+                    }
+                }
+                Spacer(modifier = Modifier.height(12.dp))
+                // Координаты
+                Card(
+                    modifier = Modifier.fillMaxWidth(),
+                    colors = CardDefaults.cardColors(
+                        containerColor = MaterialTheme.colorScheme.surfaceVariant
+                    )
+                ) {
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(16.dp),
+                        horizontalArrangement = Arrangement.SpaceEvenly
+                    ) {
+                        Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                            Text(
+                                text = "Широта",
+                                fontSize = 12.sp,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                            Text(
+                                text = "%.5f".format(s.lat),
+                                fontSize = 16.sp,
+                                fontWeight = FontWeight.SemiBold
+                            )
+                        }
+                        VerticalDivider(modifier = Modifier.height(40.dp))
+                        Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                            Text(
+                                text = "Долгота",
+                                fontSize = 12.sp,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                            Text(
+                                text = "%.5f".format(s.lng),
+                                fontSize = 16.sp,
+                                fontWeight = FontWeight.SemiBold
+                            )
                         }
                     }
                 }
             }
-        }
 
-        // Итоговый отчёт
-        if (state.step == WeatherStep.DONE && state.report != null) {
-            Card(
-                modifier = Modifier.fillMaxWidth(),
-                colors = CardDefaults.cardColors(
-                    containerColor = MaterialTheme.colorScheme.primaryContainer
-                )
-            ) {
-                Column(modifier = Modifier.padding(16.dp)) {
-                    Text(
-                        text = "Итоговый отчёт",
-                        fontWeight = FontWeight.Bold,
-                        fontSize = 18.sp
+            is LocationState.Error -> {
+                Card(
+                    modifier = Modifier.fillMaxWidth(),
+                    colors = CardDefaults.cardColors(
+                        containerColor = MaterialTheme.colorScheme.errorContainer
                     )
-                    Spacer(modifier = Modifier.height(4.dp))
-                    Text(
-                        text = state.report!!,
-                        fontSize = 22.sp,
-                        fontWeight = FontWeight.Medium,
-                        color = MaterialTheme.colorScheme.onPrimaryContainer
-                    )
+                ) {
+                    Row(
+                        modifier = Modifier.padding(16.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Text(
+                            text = "⚠️",
+                            fontSize = 24.sp
+                        )
+                        Spacer(modifier = Modifier.width(12.dp))
+                        Text(
+                            text = s.message,
+                            fontSize = 15.sp,
+                            color = MaterialTheme.colorScheme.onErrorContainer
+                        )
+                    }
                 }
             }
         }
 
-        // Ошибка
-        if (state.step == WeatherStep.ERROR && state.errorMessage != null) {
-            Text(
-                text = state.errorMessage!!,
-                color = MaterialTheme.colorScheme.error,
-                fontSize = 15.sp
-            )
+        // Блок "отказано в разрешении"
+        if (permissionDenied) {
+            Spacer(modifier = Modifier.height(12.dp))
+            Card(
+                modifier = Modifier.fillMaxWidth(),
+                colors = CardDefaults.cardColors(
+                    containerColor = MaterialTheme.colorScheme.errorContainer
+                )
+            ) {
+                Text(
+                    text = "⚠️ Разрешение на геолокацию отклонено. Выдайте разрешение в настройках приложения.",
+                    modifier = Modifier.padding(16.dp),
+                    fontSize = 14.sp,
+                    color = MaterialTheme.colorScheme.onErrorContainer
+                )
+            }
         }
 
-        Spacer(modifier = Modifier.height(8.dp))
+        Spacer(modifier = Modifier.height(32.dp))
 
         // Кнопка
         Button(
             onClick = {
-                if (state.step == WeatherStep.DONE || state.step == WeatherStep.ERROR) {
+                permissionDenied = false
+                if (state is LocationState.Success || state is LocationState.Error) {
                     viewModel.reset()
                 } else {
-                    if (!hasNotificationPermission && Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-                        permissionLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
-                    } else {
-                        viewModel.startForecast()
-                    }
+                    permissionLauncher.launch(
+                        arrayOf(
+                            Manifest.permission.ACCESS_FINE_LOCATION,
+                            Manifest.permission.ACCESS_COARSE_LOCATION
+                        )
+                    )
                 }
             },
-            enabled = !isWorking,
+            enabled = !isLoading,
             modifier = Modifier
                 .fillMaxWidth()
                 .height(56.dp)
         ) {
             Text(
-                text = when (state.step) {
-                    WeatherStep.DONE, WeatherStep.ERROR -> "Начать заново"
-                    else -> "☁ Собрать прогноз"
+                text = when (state) {
+                    is LocationState.Success, is LocationState.Error -> "🔄 Обновить"
+                    else -> "📍 Получить мой адрес"
                 },
                 fontSize = 16.sp
             )

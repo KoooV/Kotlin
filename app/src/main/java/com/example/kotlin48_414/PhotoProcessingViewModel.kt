@@ -1,175 +1,130 @@
 package com.example.kotlin48_414
 
+import android.annotation.SuppressLint
 import android.app.Application
-import android.app.NotificationChannel
-import android.app.NotificationManager
 import android.content.Context
-import androidx.core.app.NotificationCompat
+import android.location.Address
+import android.location.Geocoder
+import android.location.LocationManager
+import android.os.Build
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
-import androidx.work.*
-import com.example.kotlin48_414.workers.WeatherReportWorker
-import com.example.kotlin48_414.workers.WeatherWorker
+import com.google.android.gms.location.LocationServices
+import com.google.android.gms.location.Priority
+import com.google.android.gms.tasks.CancellationTokenSource
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.suspendCancellableCoroutine
+import java.util.Locale
+import kotlin.coroutines.resume
 
-enum class WeatherStep { IDLE, LOADING, REPORT, DONE, ERROR }
+sealed class LocationState {
+    data object Idle : LocationState()
+    data object Loading : LocationState()
+    data class Success(
+        val address: String,
+        val lat: Double,
+        val lng: Double
+    ) : LocationState()
+    data class Error(val message: String) : LocationState()
+}
 
-data class CityWeatherState(
-    val city: String,
-    val temperature: Int? = null,
-    val done: Boolean = false
-)
+class LocationViewModel(application: Application) : AndroidViewModel(application) {
 
-data class WeatherForecastState(
-    val step: WeatherStep = WeatherStep.IDLE,
-    val cities: List<CityWeatherState> = emptyList(),
-    val report: String? = null,
-    val errorMessage: String? = null
-)
+    private val fusedClient = LocationServices.getFusedLocationProviderClient(application)
 
-class PhotoProcessingViewModel(application: Application) : AndroidViewModel(application) {
+    private val _state = MutableStateFlow<LocationState>(LocationState.Idle)
+    val state: StateFlow<LocationState> = _state
 
-    private val workManager = WorkManager.getInstance(application)
-    private val notificationManager =
-        application.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
+    @SuppressLint("MissingPermission")
+    fun fetchLocation() {
+        _state.value = LocationState.Loading
 
-    private val _state = MutableStateFlow(WeatherForecastState())
-    val state: StateFlow<WeatherForecastState> = _state
+        val context = getApplication<Application>()
 
-    private val cityList = listOf("Москва", "Лондон", "Нью-Йорк", "Токио")
-
-    private fun ensureChannel() {
-        val channel = NotificationChannel(
-            WeatherWorker.CHANNEL_ID,
-            "Прогноз погоды",
-            NotificationManager.IMPORTANCE_LOW
-        ).apply { description = "Уведомления о загрузке прогноза погоды" }
-        notificationManager.createNotificationChannel(channel)
-    }
-
-    private fun showProgressNotification(text: String) {
-        ensureChannel()
-        val notification = NotificationCompat.Builder(getApplication(), WeatherWorker.CHANNEL_ID)
-            .setContentTitle("Загрузка погоды")
-            .setContentText(text)
-            .setSmallIcon(android.R.drawable.ic_dialog_info)
-            .setOngoing(true)
-            .setProgress(0, 0, true)
-            .build()
-        notificationManager.notify(PROGRESS_NOTIF_ID, notification)
-    }
-
-    private fun cancelProgressNotification() {
-        notificationManager.cancel(PROGRESS_NOTIF_ID)
-    }
-
-    fun startForecast() {
-        _state.value = WeatherForecastState(
-            step = WeatherStep.LOADING,
-            cities = cityList.map { CityWeatherState(it) }
-        )
-
-        showProgressNotification("Загружаем погоду для ${cityList.size} городов…")
-
-        // Создаём параллельные запросы для каждого города
-        val cityRequests = cityList.mapIndexed { index, city ->
-            OneTimeWorkRequestBuilder<WeatherWorker>()
-                .setInputData(
-                    workDataOf(
-                        WeatherWorker.KEY_CITY to city,
-                        WeatherWorker.KEY_NOTIF_ID to (WeatherWorker.NOTIFICATION_ID + index)
-                    )
-                )
-                .addTag("weather_$city")
-                .build()
+        // Проверяем, включён ли GPS/сеть
+        val lm = context.getSystemService(Context.LOCATION_SERVICE) as LocationManager
+        val gpsEnabled = lm.isProviderEnabled(LocationManager.GPS_PROVIDER)
+        val networkEnabled = lm.isProviderEnabled(LocationManager.NETWORK_PROVIDER)
+        if (!gpsEnabled && !networkEnabled) {
+            _state.value = LocationState.Error("GPS и сеть отключены. Включите геолокацию в настройках.")
+            return
         }
 
-        // Запрос финального отчёта — будет запущен после всех параллельных
-        val reportRequest = OneTimeWorkRequestBuilder<WeatherReportWorker>()
-            .setInputMerger(ArrayCreatingInputMerger::class)
-            .addTag("weather_report")
-            .build()
-
-        // Запускаем параллельно, затем финальный
-        workManager.beginWith(cityRequests)
-            .then(reportRequest)
-            .enqueue()
-
-        // Наблюдаем за каждым городом
-        cityRequests.forEachIndexed { index, request ->
-            val city = cityList[index]
-            viewModelScope.launch {
-                workManager.getWorkInfoByIdFlow(request.id).collect { info ->
-                    if (info == null) return@collect
-                    when (info.state) {
-                        WorkInfo.State.SUCCEEDED -> {
-                            val temp = info.outputData.getString(WeatherWorker.KEY_TEMPERATURE)?.toIntOrNull() ?: 0
-                            val updatedCities = _state.value.cities.map {
-                                if (it.city == city) it.copy(temperature = temp, done = true)
-                                else it
-                            }
-                            _state.value = _state.value.copy(cities = updatedCities)
-
-                            // Обновляем уведомление
-                            val done = updatedCities.filter { it.done }.joinToString(", ") { it.city }
-                            val pending = updatedCities.filter { !it.done }
-                            if (pending.isEmpty()) {
-                                showProgressNotification("Все данные получены, формируем отчёт…")
-                            } else {
-                                showProgressNotification("Готово: $done\n${pending.joinToString(", ") { it.city }} в процессе…")
-                            }
-                        }
-                        WorkInfo.State.FAILED, WorkInfo.State.CANCELLED -> {
-                            cancelProgressNotification()
-                            _state.value = _state.value.copy(
-                                step = WeatherStep.ERROR,
-                                errorMessage = "Ошибка получения погоды для $city"
-                            )
-                        }
-                        else -> {}
-                    }
-                }
-            }
-        }
-
-        // Наблюдаем за финальным отчётом
         viewModelScope.launch {
-            workManager.getWorkInfoByIdFlow(reportRequest.id).collect { info ->
-                if (info == null) return@collect
-                when (info.state) {
-                    WorkInfo.State.RUNNING -> {
-                        _state.value = _state.value.copy(step = WeatherStep.REPORT)
-                    }
-                    WorkInfo.State.SUCCEEDED -> {
-                        val report = info.outputData.getString(WeatherReportWorker.KEY_REPORT)
-                        cancelProgressNotification()
-                        _state.value = _state.value.copy(
-                            step = WeatherStep.DONE,
-                            report = report
-                        )
-                    }
-                    WorkInfo.State.FAILED, WorkInfo.State.CANCELLED -> {
-                        cancelProgressNotification()
-                        _state.value = _state.value.copy(
-                            step = WeatherStep.ERROR,
-                            errorMessage = "Ошибка формирования отчёта"
-                        )
-                    }
-                    else -> {}
+            try {
+                val location = getCurrentLocation()
+                if (location == null) {
+                    _state.value = LocationState.Error("Не удалось получить координаты. Попробуйте ещё раз.")
+                    return@launch
                 }
+
+                val lat = location.latitude
+                val lng = location.longitude
+                val address = reverseGeocode(context, lat, lng)
+
+                _state.value = LocationState.Success(
+                    address = address,
+                    lat = lat,
+                    lng = lng
+                )
+            } catch (e: Exception) {
+                _state.value = LocationState.Error("Ошибка: ${e.localizedMessage ?: "неизвестная ошибка"}")
             }
         }
+    }
+
+    @SuppressLint("MissingPermission")
+    private suspend fun getCurrentLocation(): android.location.Location? =
+        suspendCancellableCoroutine { cont ->
+            val cts = CancellationTokenSource()
+            fusedClient
+                .getCurrentLocation(Priority.PRIORITY_HIGH_ACCURACY, cts.token)
+                .addOnSuccessListener { loc -> cont.resume(loc) }
+                .addOnFailureListener { cont.resume(null) }
+
+            cont.invokeOnCancellation { cts.cancel() }
+        }
+
+    private suspend fun reverseGeocode(context: Context, lat: Double, lng: Double): String {
+        return suspendCancellableCoroutine { cont ->
+            val geocoder = Geocoder(context, Locale.getDefault())
+
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+                geocoder.getFromLocation(lat, lng, 1, object : Geocoder.GeocodeListener {
+                    override fun onGeocode(addresses: MutableList<Address>) {
+                        cont.resume(formatAddress(addresses.firstOrNull()))
+                    }
+                    override fun onError(errorMessage: String?) {
+                        cont.resume("Адрес не определён (ошибка геокодера)")
+                    }
+                })
+            } else {
+                @Suppress("DEPRECATION")
+                val addresses = try {
+                    geocoder.getFromLocation(lat, lng, 1)
+                } catch (_: Exception) {
+                    null
+                }
+                cont.resume(formatAddress(addresses?.firstOrNull()))
+            }
+        }
+    }
+
+    private fun formatAddress(address: Address?): String {
+        if (address == null) return "Адрес не найден"
+        val parts = mutableListOf<String>()
+        address.thoroughfare?.let { parts.add(it) }
+        address.subThoroughfare?.let { parts.add(it) }
+        address.locality?.let { parts.add(it) }
+        address.adminArea?.let { parts.add(it) }
+        address.countryName?.let { parts.add(it) }
+        return if (parts.isNotEmpty()) parts.joinToString(", ")
+        else address.getAddressLine(0) ?: "Адрес не найден"
     }
 
     fun reset() {
-        workManager.cancelAllWork()
-        cancelProgressNotification()
-        _state.value = WeatherForecastState()
-    }
-
-    companion object {
-        private const val PROGRESS_NOTIF_ID = 999
+        _state.value = LocationState.Idle
     }
 }
