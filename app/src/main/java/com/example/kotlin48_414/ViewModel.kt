@@ -1,40 +1,39 @@
 package com.example.kotlin48_414
 
-import android.app.Application
-import android.content.Context
-import androidx.core.content.edit
-import androidx.lifecycle.AndroidViewModel
-import kotlinx.coroutines.flow.MutableStateFlow
-import kotlinx.coroutines.flow.StateFlow
+import androidx.lifecycle.ViewModel
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.flow
 
-class ReminderViewModel(application: Application) : AndroidViewModel(application) {
+class AnimalFactViewModel : ViewModel() {
 
-    private val prefs = application.getSharedPreferences(
-        BootReceiver.PREFS_NAME, Context.MODE_PRIVATE
+    private val facts = listOf(
+        "Сердце синего кита настолько огромно, что по его артериям может проплыть маленький ребёнок.",
+        "У осьминога три сердца: два жаберных и одно основное, перекачивающее кровь по телу.",
+        "Коровы способны подниматься по лестнице, но не могут спускаться по ней из-за особого строения коленей.",
+        "Дельфины спят с одним открытым глазом — они отключают лишь половину мозга, чтобы продолжать дышать.",
+        "Муравьи никогда не спят и не имеют лёгких.",
+        "У слонов есть уникальный ритуал прощания с умершими сородичами — они могут часами стоять рядом с телом.",
+        "Крокодилы не могут высунуть язык, потому что он прикреплён к нёбу по всей длине.",
+        "Глаз страуса больше его мозга.",
+        "Бабочки ощущают вкус лапками, а не ртом.",
+        "У жирафов и людей одинаковое количество шейных позвонков — семь.",
+        "Кошки проводят около 70% своей жизни во сне.",
+        "Медузы существуют уже более 650 миллионов лет — они появились раньше динозавров, акул и деревьев.",
+        "Колибри — единственная птица, которая умеет летать назад.",
+        "У морских коньков детёнышей вынашивает и рожает самец, а не самка.",
+        "Попугаи могут давать имена своим птенцам, используя уникальные звуковые сигналы."
     )
 
-    private val _enabled = MutableStateFlow(prefs.getBoolean(BootReceiver.KEY_ENABLED, false))
-    val enabled: StateFlow<Boolean> = _enabled
-
-    // Время следующего срабатывания в миллисекундах (0 если выключено)
-    private val _nextAlarmMs = MutableStateFlow(
-        if (_enabled.value) AlarmScheduler.nextAlarmTimeMillis() else 0L
-    )
-    val nextAlarmMs: StateFlow<Long> = _nextAlarmMs
-
-    fun enable() {
-        val context = getApplication<Application>()
-        AlarmScheduler.schedule(context)
-        prefs.edit { putBoolean(BootReceiver.KEY_ENABLED, true) }
-        _enabled.value = true
-        _nextAlarmMs.value = AlarmScheduler.nextAlarmTimeMillis()
-    }
-
-    fun disable() {
-        val context = getApplication<Application>()
-        AlarmScheduler.cancel(context)
-        prefs.edit { putBoolean(BootReceiver.KEY_ENABLED, false) }
-        _enabled.value = false
-        _nextAlarmMs.value = 0L
+    /**
+     * Cold Flow — при каждом collect будет заново запущена генерация:
+     * имитация загрузки (delay) и затем emit случайного факта.
+     */
+    fun getRandomFact(): Flow<String> = flow {
+        val delayMs = (1500L..3000L).random()
+        delay(delayMs)
+        val fact = facts.random()
+        emit(fact)
     }
 }
+

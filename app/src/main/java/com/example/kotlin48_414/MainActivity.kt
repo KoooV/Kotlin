@@ -1,42 +1,25 @@
 package com.example.kotlin48_414
 
-import android.Manifest
-import android.app.AlarmManager
-import android.content.Context
-import android.content.Intent
-import android.content.pm.PackageManager
-import android.net.Uri
-import android.os.Build
 import android.os.Bundle
-import android.provider.Settings
 import androidx.activity.ComponentActivity
-import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
-import androidx.activity.result.contract.ActivityResultContracts
-import androidx.compose.foundation.background
+import androidx.compose.animation.*
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.layout.*
-import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
-import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import androidx.core.content.ContextCompat
-import androidx.lifecycle.DefaultLifecycleObserver
-import androidx.lifecycle.LifecycleOwner
-import androidx.lifecycle.compose.LocalLifecycleOwner
-import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.example.kotlin48_414.ui.theme.Kotlin48414Theme
-import java.text.SimpleDateFormat
-import java.util.*
+import kotlinx.coroutines.flow.catch
+import kotlinx.coroutines.launch
 
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -45,7 +28,7 @@ class MainActivity : ComponentActivity() {
         setContent {
             Kotlin48414Theme {
                 Scaffold(modifier = Modifier.fillMaxSize()) { innerPadding ->
-                    ReminderScreen(modifier = Modifier.padding(innerPadding))
+                    AnimalFactScreen(modifier = Modifier.padding(innerPadding))
                 }
             }
         }
@@ -53,42 +36,19 @@ class MainActivity : ComponentActivity() {
 }
 
 @Composable
-fun ReminderScreen(
+fun AnimalFactScreen(
     modifier: Modifier = Modifier,
-    viewModel: ReminderViewModel = viewModel()
+    viewModel: AnimalFactViewModel = viewModel()
 ) {
-    val context = LocalContext.current
-    val enabled by viewModel.enabled.collectAsStateWithLifecycle()
-    val nextAlarmMs by viewModel.nextAlarmMs.collectAsStateWithLifecycle()
+    val scope = rememberCoroutineScope()
 
-    // Разрешение POST_NOTIFICATIONS (Android 13+)
-    var hasNotifPermission by remember {
-        mutableStateOf(
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU)
-                ContextCompat.checkSelfPermission(
-                    context, Manifest.permission.POST_NOTIFICATIONS
-                ) == PackageManager.PERMISSION_GRANTED
-            else true
-        )
-    }
-    val notifPermLauncher = rememberLauncherForActivityResult(
-        ActivityResultContracts.RequestPermission()
-    ) { granted -> hasNotifPermission = granted }
+    // Сохраняем факт и состояние загрузки через saveable — переживает поворот экрана
+    var fact by rememberSaveable { mutableStateOf<String?>(null) }
+    var isLoading by rememberSaveable { mutableStateOf(false) }
+    var errorMessage by rememberSaveable { mutableStateOf<String?>(null) }
 
-    // Разрешение SCHEDULE_EXACT_ALARM (Android 12+)
-    var canScheduleExact by remember { mutableStateOf(canScheduleExactAlarms(context)) }
-
-    // Обновляем canScheduleExact при возврате из настроек
-    val lifecycleOwner = LocalLifecycleOwner.current
-    DisposableEffect(lifecycleOwner) {
-        val observer = object : DefaultLifecycleObserver {
-            override fun onResume(owner: LifecycleOwner) {
-                canScheduleExact = canScheduleExactAlarms(context)
-            }
-        }
-        lifecycleOwner.lifecycle.addObserver(observer)
-        onDispose { lifecycleOwner.lifecycle.removeObserver(observer) }
-    }
+    // Счётчик для анимации — при каждом новом факте меняется ключ
+    var factKey by rememberSaveable { mutableIntStateOf(0) }
 
     Column(
         modifier = modifier
@@ -97,178 +57,142 @@ fun ReminderScreen(
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.Center
     ) {
-
-        // Иконка
-        Text(text = "💊", fontSize = 72.sp)
-        Spacer(modifier = Modifier.height(16.dp))
-
         // Заголовок
         Text(
-            text = "Напоминание\nо таблетке",
-            fontSize = 30.sp,
+            text = "🐾",
+            fontSize = 64.sp
+        )
+        Spacer(modifier = Modifier.height(12.dp))
+        Text(
+            text = "Случайные факты\nо животных",
+            fontSize = 28.sp,
             fontWeight = FontWeight.Bold,
             textAlign = TextAlign.Center,
-            lineHeight = 38.sp
+            lineHeight = 36.sp
         )
         Spacer(modifier = Modifier.height(32.dp))
 
-        // Индикатор состояния
-        Row(
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.Center
-        ) {
-            Box(
-                modifier = Modifier
-                    .size(16.dp)
-                    .clip(CircleShape)
-                    .background(if (enabled) Color(0xFF4CAF50) else Color(0xFF9E9E9E))
+        // Индикатор загрузки
+        if (isLoading) {
+            CircularProgressIndicator(
+                modifier = Modifier.size(48.dp),
+                strokeWidth = 4.dp
             )
-            Spacer(modifier = Modifier.width(10.dp))
-            Text(
-                text = if (enabled) "Включено" else "Выключено",
-                fontSize = 18.sp,
-                fontWeight = FontWeight.Medium,
-                color = if (enabled) Color(0xFF4CAF50) else Color(0xFF9E9E9E)
-            )
-        }
-        Spacer(modifier = Modifier.height(24.dp))
-
-        // Карточка со временем следующего напоминания
-        if (enabled && nextAlarmMs > 0L) {
-            Card(
-                modifier = Modifier.fillMaxWidth(),
-                colors = CardDefaults.cardColors(
-                    containerColor = MaterialTheme.colorScheme.primaryContainer
-                )
-            ) {
-                Column(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(20.dp),
-                    horizontalAlignment = Alignment.CenterHorizontally
-                ) {
-                    Text(
-                        text = "Следующее напоминание:",
-                        fontSize = 14.sp,
-                        color = MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.7f)
-                    )
-                    Spacer(modifier = Modifier.height(6.dp))
-                    Text(
-                        text = formatNextAlarm(nextAlarmMs),
-                        fontSize = 22.sp,
-                        fontWeight = FontWeight.Bold,
-                        color = MaterialTheme.colorScheme.onPrimaryContainer,
-                        textAlign = TextAlign.Center
-                    )
-                }
-            }
             Spacer(modifier = Modifier.height(16.dp))
-        }
-
-        // Предупреждение: нет разрешения на уведомления
-        if (!hasNotifPermission) {
-            PermissionWarningCard(
-                text = "Разрешите уведомления, чтобы получать напоминания о таблетке.",
-                buttonText = "Разрешить",
-                onClick = {
-                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-                        notifPermLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
-                    }
-                }
+            Text(
+                text = "Ищем интересный факт…",
+                fontSize = 14.sp,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
             )
-            Spacer(modifier = Modifier.height(12.dp))
+            Spacer(modifier = Modifier.height(24.dp))
         }
 
-        // Предупреждение: нет разрешения на точные будильники
-        if (!canScheduleExact) {
-            PermissionWarningCard(
-                text = "Для точных будильников необходимо специальное разрешение.",
-                buttonText = "Настройки",
-                onClick = {
-                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
-                        context.startActivity(
-                            Intent(Settings.ACTION_REQUEST_SCHEDULE_EXACT_ALARM).apply {
-                                data = Uri.parse("package:${context.packageName}")
-                            }
+        // Карточка с фактом — с анимацией появления
+        AnimatedContent(
+            targetState = factKey,
+            transitionSpec = {
+                (fadeIn(animationSpec = tween(400)) +
+                        slideInVertically(animationSpec = tween(400)) { it / 2 })
+                    .togetherWith(
+                        fadeOut(animationSpec = tween(200)) +
+                                slideOutVertically(animationSpec = tween(200)) { -it / 2 }
+                    )
+            },
+            label = "fact_animation"
+        ) { key ->
+            if (fact != null && key > 0) {
+                Card(
+                    modifier = Modifier.fillMaxWidth(),
+                    colors = CardDefaults.cardColors(
+                        containerColor = MaterialTheme.colorScheme.primaryContainer
+                    ),
+                    elevation = CardDefaults.cardElevation(defaultElevation = 4.dp)
+                ) {
+                    Column(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(20.dp),
+                        horizontalAlignment = Alignment.CenterHorizontally
+                    ) {
+                        Text(
+                            text = "🔍 Факт",
+                            fontSize = 14.sp,
+                            fontWeight = FontWeight.Medium,
+                            color = MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.6f)
+                        )
+                        Spacer(modifier = Modifier.height(8.dp))
+                        Text(
+                            text = fact!!,
+                            fontSize = 18.sp,
+                            fontWeight = FontWeight.Normal,
+                            color = MaterialTheme.colorScheme.onPrimaryContainer,
+                            textAlign = TextAlign.Center,
+                            lineHeight = 26.sp
                         )
                     }
                 }
-            )
-            Spacer(modifier = Modifier.height(12.dp))
+            } else if (fact == null && !isLoading) {
+                Text(
+                    text = "Нажмите кнопку, чтобы узнать интересный факт!",
+                    fontSize = 16.sp,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    textAlign = TextAlign.Center
+                )
+            }
         }
 
-        Spacer(modifier = Modifier.height(8.dp))
+        // Ошибка
+        if (errorMessage != null) {
+            Spacer(modifier = Modifier.height(12.dp))
+            Card(
+                modifier = Modifier.fillMaxWidth(),
+                colors = CardDefaults.cardColors(
+                    containerColor = MaterialTheme.colorScheme.errorContainer
+                )
+            ) {
+                Text(
+                    text = errorMessage!!,
+                    modifier = Modifier.padding(16.dp),
+                    color = MaterialTheme.colorScheme.onErrorContainer,
+                    fontSize = 14.sp
+                )
+            }
+        }
 
-        // Главная кнопка
+        Spacer(modifier = Modifier.height(32.dp))
+
+        // Кнопка
         Button(
             onClick = {
-                if (!hasNotifPermission && Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-                    notifPermLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
-                    return@Button
+                errorMessage = null
+                isLoading = true
+                scope.launch {
+                    viewModel.getRandomFact()
+                        .catch { e ->
+                            isLoading = false
+                            errorMessage = "Ошибка: ${e.message}"
+                        }
+                        .collect { newFact ->
+                            fact = newFact
+                            factKey++
+                            isLoading = false
+                        }
                 }
-                canScheduleExact = canScheduleExactAlarms(context)
-                if (!canScheduleExact && !enabled) return@Button
-                if (enabled) viewModel.disable() else viewModel.enable()
             },
+            enabled = !isLoading,
             modifier = Modifier
                 .fillMaxWidth()
-                .height(60.dp),
+                .height(56.dp),
             colors = ButtonDefaults.buttonColors(
-                containerColor = if (enabled)
-                    MaterialTheme.colorScheme.error
-                else
-                    MaterialTheme.colorScheme.primary
+                containerColor = MaterialTheme.colorScheme.primary
             )
         ) {
             Text(
-                text = if (enabled) "Выключить напоминание" else "Включить напоминание",
-                fontSize = 17.sp,
+                text = if (isLoading) "Загрузка…" else "🎲 Новый факт!",
+                fontSize = 18.sp,
                 fontWeight = FontWeight.SemiBold
             )
         }
     }
-}
-
-@Composable
-private fun PermissionWarningCard(text: String, buttonText: String, onClick: () -> Unit) {
-    Card(
-        modifier = Modifier.fillMaxWidth(),
-        colors = CardDefaults.cardColors(
-            containerColor = MaterialTheme.colorScheme.errorContainer
-        )
-    ) {
-        Row(
-            modifier = Modifier.padding(12.dp),
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            Text(
-                text = text,
-                modifier = Modifier.weight(1f),
-                fontSize = 13.sp,
-                color = MaterialTheme.colorScheme.onErrorContainer
-            )
-            Spacer(modifier = Modifier.width(8.dp))
-            TextButton(onClick = onClick) {
-                Text(buttonText, fontSize = 12.sp)
-            }
-        }
-    }
-}
-
-private fun canScheduleExactAlarms(context: Context): Boolean {
-    return if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
-        val am = context.getSystemService(Context.ALARM_SERVICE) as AlarmManager
-        am.canScheduleExactAlarms()
-    } else true
-}
-
-private fun formatNextAlarm(ms: Long): String {
-    val now = Calendar.getInstance()
-    val target = Calendar.getInstance().apply { timeInMillis = ms }
-    val isToday = now.get(Calendar.DAY_OF_YEAR) == target.get(Calendar.DAY_OF_YEAR) &&
-            now.get(Calendar.YEAR) == target.get(Calendar.YEAR)
-    val dayLabel = if (isToday) "сегодня" else "завтра"
-    val timeFmt = SimpleDateFormat("HH:mm", Locale.getDefault())
-    return "$dayLabel в ${timeFmt.format(target.time)}"
 }
 
