@@ -1,39 +1,52 @@
 package com.example.kotlin48_414
 
 import androidx.lifecycle.ViewModel
+import androidx.lifecycle.viewModelScope
 import kotlinx.coroutines.delay
-import kotlinx.coroutines.flow.Flow
-import kotlinx.coroutines.flow.flow
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.launch
+import kotlin.random.Random
 
-class AnimalFactViewModel : ViewModel() {
+class CurrencyViewModel : ViewModel() {
 
-    private val facts = listOf(
-        "Сердце синего кита настолько огромно, что по его артериям может проплыть маленький ребёнок.",
-        "У осьминога три сердца: два жаберных и одно основное, перекачивающее кровь по телу.",
-        "Коровы способны подниматься по лестнице, но не могут спускаться по ней из-за особого строения коленей.",
-        "Дельфины спят с одним открытым глазом — они отключают лишь половину мозга, чтобы продолжать дышать.",
-        "Муравьи никогда не спят и не имеют лёгких.",
-        "У слонов есть уникальный ритуал прощания с умершими сородичами — они могут часами стоять рядом с телом.",
-        "Крокодилы не могут высунуть язык, потому что он прикреплён к нёбу по всей длине.",
-        "Глаз страуса больше его мозга.",
-        "Бабочки ощущают вкус лапками, а не ртом.",
-        "У жирафов и людей одинаковое количество шейных позвонков — семь.",
-        "Кошки проводят около 70% своей жизни во сне.",
-        "Медузы существуют уже более 650 миллионов лет — они появились раньше динозавров, акул и деревьев.",
-        "Колибри — единственная птица, которая умеет летать назад.",
-        "У морских коньков детёнышей вынашивает и рожает самец, а не самка.",
-        "Попугаи могут давать имена своим птенцам, используя уникальные звуковые сигналы."
-    )
+    private val _rate = MutableStateFlow(generateRate())
+    val rate: StateFlow<Double> = _rate.asStateFlow()
 
-    /**
-     * Cold Flow — при каждом collect будет заново запущена генерация:
-     * имитация загрузки (delay) и затем emit случайного факта.
-     */
-    fun getRandomFact(): Flow<String> = flow {
-        val delayMs = (1500L..3000L).random()
-        delay(delayMs)
-        val fact = facts.random()
-        emit(fact)
+    private val _previousRate = MutableStateFlow(_rate.value)
+    val previousRate: StateFlow<Double> = _previousRate.asStateFlow()
+
+    private val _isRefreshing = MutableStateFlow(false)
+    val isRefreshing: StateFlow<Boolean> = _isRefreshing.asStateFlow()
+
+    init {
+        viewModelScope.launch {
+            while (true) {
+                delay(5_000L)
+                emitNewRate()
+            }
+        }
+    }
+
+    fun refreshNow() {
+        viewModelScope.launch {
+            _isRefreshing.value = true
+            delay(300L) // небольшая имитация задержки
+            emitNewRate()
+            _isRefreshing.value = false
+        }
+    }
+
+    private fun emitNewRate() {
+        _previousRate.value = _rate.value
+        _rate.value = generateRate()
+    }
+
+    private fun generateRate(): Double {
+        // 90.5 ± 2.0 → диапазон 88.5..92.5
+        val value = 88.5 + Random.nextDouble() * 4.0
+        return Math.round(value * 100.0) / 100.0
     }
 }
 
