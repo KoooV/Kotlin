@@ -4,26 +4,42 @@ import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
+import androidx.room.Room
+import com.kov.module_5.data.local.AppDatabase
+import com.kov.module_5.data.repository.TaskRepositoryImpl
+import com.kov.module_5.data.repository.preferences.SettingsRepositoryImpl
+import com.kov.module_5.domain.usecase.*
+import com.kov.module_5.presentation.ui.screen.TaskListScreen
+import com.kov.module_5.presentation.viewmodel.TaskViewModelFactory
 import androidx.lifecycle.viewmodel.compose.viewModel
-import com.kov.module_5.data.repository.PhotoRepositoryImpl
-import com.kov.module_5.domain.usecase.ExportPhotoUseCase
-import com.kov.module_5.domain.usecase.GetPhotosUseCase
-import com.kov.module_5.presentation.gallery.GalleryScreen
-import com.kov.module_5.presentation.gallery.GalleryViewModel
-import com.kov.module_5.presentation.gallery.GalleryViewModelFactory
+
 
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
-        setContent {
-            val repository = PhotoRepositoryImpl(applicationContext)
-            val getPhotosUseCase = GetPhotosUseCase(repository)
-            val exportPhotoUseCase = ExportPhotoUseCase(repository)
-            val factory = GalleryViewModelFactory(getPhotosUseCase, exportPhotoUseCase)
-            val viewModel: GalleryViewModel = viewModel(factory = factory)
 
-            GalleryScreen(viewModel = viewModel)
+        val database = Room.databaseBuilder(
+            applicationContext,
+            AppDatabase::class.java,
+            "todo_database"
+        ).build()
+
+        val taskRepository = TaskRepositoryImpl(database.taskDao(), applicationContext)
+        val settingsRepository = SettingsRepositoryImpl(applicationContext)
+
+        val factory = TaskViewModelFactory(
+            GetTasksUseCase(taskRepository),
+            AddTaskUseCase(taskRepository),
+            UpdateTaskUseCase(taskRepository),
+            DeleteTaskUseCase(taskRepository),
+            ImportTasksUseCase(taskRepository),
+            settingsRepository
+        )
+
+        setContent {
+            val viewModel: com.kov.module_5.presentation.viewmodel.TaskViewModel = viewModel(factory = factory)
+            TaskListScreen(viewModel)
         }
     }
 }

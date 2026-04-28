@@ -1,0 +1,15 @@
+[
+  {
+    "id": "1",
+    "title": "Buy groceries",
+    "description": "Milk, Bread, Cheese",
+    "isCompleted": false
+  },
+  {
+    "id": "2",
+    "title": "Do laundry",
+    "description": "Wash clothes",
+    "isCompleted": true
+  }
+]
+
